@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Symfony
+/sae-monitoring/vendor/
+/sae-monitoring/var/
+/sae-monitoring/.env.local
+/sae-monitoring/.env.local.php
+/sae-monitoring/.env.*.local
+/sae-monitoring/public/bundles/
+/sae-monitoring/var/cache/
+/sae-monitoring/var/log/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+alertes.csv
+*.log
+
+# Keep DumpFile but ignore large temp files
+2025-SAE-main/fichier1000.txt
+2025-SAE-main/fichier182.txt
