@@ -1,0 +1,395 @@
+Option Explicit
+
+' =========================================================================
+' SAÉ 1.05 - Traiter des Données
+' Module VBA pour l'analyse de logs réseau (tcpdump) directement dans Excel
+' Auteur: Étudiant BUT R&T S1
+' Date: Janvier 2026
+' =========================================================================
+
+' --- FONCTION PRINCIPALE ---
+Sub AnalyserLogsReseau()
+    
+    ' Déclaration des variables
+    Dim cheminFichier As String
+    Dim ligneTexte As String
+    Dim numFichier As Integer
+    Dim ligneActuelle As Long
+    Dim nbLignesValides As Long
+    Dim tableau As Object
+    Dim regex As Object
+    Dim matches As Object
+    
+    ' Variables pour stocker les données extraites
+    Dim heure As String, source As String
+    Dim destination As String, port As String, flags As String
+    
+    ' Désactiver les mises à jour d'écran pour améliorer les performances
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+    ' === ÉTAPE 1 : SÉLECTION DU FICHIER ===
+    cheminFichier = Application.GetOpenFilename( _
+        "Fichiers texte (*.txt), *.txt", , _
+        "Sélectionnez le fichier DumpFile.txt")
+    
+    ' Vérifier si l'utilisateur a annulé
+    If cheminFichier = "Faux" Then
+        MsgBox "Opération annulée par l'utilisateur.", vbInformation, "SAÉ 1.05"
+        Exit Sub
+    End If
+    
+    ' === ÉTAPE 2 : PRÉPARATION DE LA FEUILLE ===
+    ' Effacer le contenu existant
+    Cells.Clear
+    
+    ' Créer les en-têtes
+    Range("A1").Value = "Heure"
+    Range("B1").Value = "Source"
+    Range("C1").Value = "Destination"
+    Range("D1").Value = "Port"
+    Range("E1").Value = "Flags"
+    
+    ' Mise en forme des en-têtes
+    Range("A1:E1").Font.Bold = True
+    Range("A1:E1").Interior.Color = RGB(79, 129, 189)
+    Range("A1:E1").Font.Color = RGB(255, 255, 255)
+    Range("A1:E1").HorizontalAlignment = xlCenter
+    
+    ' === ÉTAPE 3 : CONFIGURATION DE L'EXPRESSION RÉGULIÈRE ===
+    Set regex = CreateObject("VBScript.RegExp")
+    regex.Global = False
+    regex.IgnoreCase = True
+    
+    ' Pattern pour capturer les données du log tcpdump
+    ' Format: "15:34:04.766656 IP BP-Linux8.ssh > 192.168.190.130.50019: Flags [P.]"
+    regex.Pattern = "^(\d{2}:\d{2}:\d{2})\.\d+\s+IP\s+([\w\.-]+)(?:\.\w+)?\s+>\s+([\d\.]+)\.(\d+):.*Flags\s+\[([^\]]+)\]"
+    
+    ' === ÉTAPE 4 : LECTURE ET PARSING DU FICHIER ===
+    numFichier = FreeFile
+    ligneActuelle = 2 ' Commencer après les en-têtes
+    nbLignesValides = 0
+    
+    On Error GoTo GestionErreur
+    
+    Open cheminFichier For Input As #numFichier
+    
+    ' Afficher une barre de progression (simple)
+    Application.StatusBar = "Lecture du fichier en cours..."
+    
+    Do While Not EOF(numFichier)
+        Line Input #numFichier, ligneTexte
+        
+        ' Ignorer les lignes hexadécimales (commencent par espaces + 0x)
+        If Not (ligneTexte Like "*0x*" And Left(Trim(ligneTexte), 2) = "0x") Then
+            
+            ' Tester si la ligne correspond au pattern
+            If regex.Test(ligneTexte) Then
+                Set matches = regex.Execute(ligneTexte)
+                
+                ' Extraire les données capturées
+                heure = matches(0).SubMatches(0)
+                source = matches(0).SubMatches(1)
+                destination = matches(0).SubMatches(2)
+                port = matches(0).SubMatches(3)
+                flags = matches(0).SubMatches(4)
+                
+                ' Insérer les données dans la feuille Excel
+                Cells(ligneActuelle, 1).Value = heure
+                Cells(ligneActuelle, 2).Value = source
+                Cells(ligneActuelle, 3).Value = destination
+                Cells(ligneActuelle, 4).Value = CLng(port) ' Convertir en nombre
+                Cells(ligneActuelle, 5).Value = flags
+                
+                ligneActuelle = ligneActuelle + 1
+                nbLignesValides = nbLignesValides + 1
+                
+                ' Mise à jour de la progression tous les 100 lignes
+                If nbLignesValides Mod 100 = 0 Then
+                    Application.StatusBar = "Lignes traitées: " & nbLignesValides
+                End If
+            End If
+        End If
+    Loop
+    
+    Close #numFichier
+    
+    ' === ÉTAPE 5 : MISE EN FORME DU TABLEAU ===
+    If nbLignesValides > 0 Then
+        ' Ajuster la largeur des colonnes
+        Columns("A:E").AutoFit
+        
+        ' Appliquer des bordures
+        Range("A1:E" & ligneActuelle - 1).Borders.LineStyle = xlContinuous
+        
+        ' Créer un tableau Excel
+        ActiveSheet.ListObjects.Add(xlSrcRange, Range("A1:E" & ligneActuelle - 1), , xlYes).Name = "TableauLogs"
+        ActiveSheet.ListObjects("TableauLogs").TableStyle = "TableStyleMedium9"
+        
+        ' === ÉTAPE 6 : DÉTECTION DES ANOMALIES ===
+        Call DetecterAnomalies(nbLignesValides)
+        
+        ' Message de succès
+        MsgBox nbLignesValides & " lignes valides ont été importées avec succès!" & vbCrLf & vbCrLf & _
+               "Consultez l'onglet 'Anomalies' pour les alertes détectées.", _
+               vbInformation, "Importation réussie"
+    Else
+        MsgBox "Aucune donnée valide trouvée dans le fichier!", vbExclamation, "Erreur"
+    End If
+    
+    ' Réactiver les mises à jour
+    Application.StatusBar = False
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    
+    Exit Sub
+
+GestionErreur:
+    Close #numFichier
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+    MsgBox "Erreur lors de la lecture du fichier: " & Err.Description, vbCritical, "Erreur"
+End Sub
+
+
+' --- FONCTION DE DÉTECTION DES ANOMALIES ---
+Sub DetecterAnomalies(nbLignes As Long)
+    
+    Dim ws As Worksheet
+    Dim wsAnomalies As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long, j As Long
+    Dim source As String
+    Dim compteurSYN As Long
+    Dim compteurPorts As Long
+    Dim compteurSuspects As Long
+    Dim portsUniques As Object
+    Dim alerteLigne As Long
+    
+    ' Créer ou effacer l'onglet Anomalies
+    On Error Resume Next
+    Set wsAnomalies = Worksheets("Anomalies")
+    On Error GoTo 0
+    
+    If wsAnomalies Is Nothing Then
+        Set wsAnomalies = Worksheets.Add(After:=Worksheets(Worksheets.Count))
+        wsAnomalies.Name = "Anomalies"
+    Else
+        wsAnomalies.Cells.Clear
+    End If
+    
+    Set ws = Worksheets(1) ' Feuille avec les données
+    
+    ' === EN-TÊTES DE L'ONGLET ANOMALIES ===
+    With wsAnomalies
+        .Range("A1").Value = "Type Anomalie"
+        .Range("B1").Value = "IP Source"
+        .Range("C1").Value = "Détails"
+        .Range("D1").Value = "Sévérité"
+        
+        ' Mise en forme
+        .Range("A1:D1").Font.Bold = True
+        .Range("A1:D1").Interior.Color = RGB(255, 0, 0)
+        .Range("A1:D1").Font.Color = RGB(255, 255, 255)
+        .Range("A1:D1").HorizontalAlignment = xlCenter
+    End With
+    
+    alerteLigne = 2
+    derniereLigne = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    
+    ' Dictionnaire pour compter les occurrences par IP
+    Set portsUniques = CreateObject("Scripting.Dictionary")
+    
+    ' === ANOMALIE 1 : SYN FLOOD ATTACK ===
+    Application.StatusBar = "Analyse: SYN Flood Attack..."
+    
+    ' Compter les paquets SYN par IP source
+    Dim dicSYN As Object
+    Set dicSYN = CreateObject("Scripting.Dictionary")
+    
+    For i = 2 To derniereLigne
+        If InStr(ws.Cells(i, 5).Value, "S") > 0 Then
+            source = ws.Cells(i, 2).Value
+            If dicSYN.Exists(source) Then
+                dicSYN(source) = dicSYN(source) + 1
+            Else
+                dicSYN.Add source, 1
+            End If
+        End If
+    Next i
+    
+    ' Générer les alertes (seuil > 100)
+    Dim cle As Variant
+    For Each cle In dicSYN.Keys
+        If dicSYN(cle) > 100 Then
+            With wsAnomalies
+                .Cells(alerteLigne, 1).Value = "SYN Flood Attack"
+                .Cells(alerteLigne, 2).Value = cle
+                .Cells(alerteLigne, 3).Value = dicSYN(cle) & " paquets SYN"
+                
+                If dicSYN(cle) > 1000 Then
+                    .Cells(alerteLigne, 4).Value = "CRITIQUE"
+                    .Cells(alerteLigne, 4).Interior.Color = RGB(255, 0, 0)
+                Else
+                    .Cells(alerteLigne, 4).Value = "ÉLEVÉE"
+                    .Cells(alerteLigne, 4).Interior.Color = RGB(255, 192, 0)
+                End If
+                
+                alerteLigne = alerteLigne + 1
+            End With
+        End If
+    Next cle
+    
+    ' === ANOMALIE 2 : PORT SCAN ===
+    Application.StatusBar = "Analyse: Port Scan..."
+    
+    ' Compter les ports uniques par IP source
+    Dim dicPorts As Object
+    Set dicPorts = CreateObject("Scripting.Dictionary")
+    
+    For i = 2 To derniereLigne
+        source = ws.Cells(i, 2).Value
+        port = ws.Cells(i, 4).Value
+        
+        Dim clePortScan As String
+        clePortScan = source & "|" & port
+        
+        If Not dicPorts.Exists(source) Then
+            Set dicPorts(source) = CreateObject("Scripting.Dictionary")
+        End If
+        
+        If Not dicPorts(source).Exists(port) Then
+            dicPorts(source).Add port, 1
+        End If
+    Next i
+    
+    ' Générer les alertes (seuil > 10 ports)
+    For Each cle In dicPorts.Keys
+        If dicPorts(cle).Count > 10 Then
+            With wsAnomalies
+                .Cells(alerteLigne, 1).Value = "Port Scan"
+                .Cells(alerteLigne, 2).Value = cle
+                .Cells(alerteLigne, 3).Value = dicPorts(cle).Count & " ports scannés"
+                
+                If dicPorts(cle).Count > 50 Then
+                    .Cells(alerteLigne, 4).Value = "CRITIQUE"
+                    .Cells(alerteLigne, 4).Interior.Color = RGB(255, 0, 0)
+                Else
+                    .Cells(alerteLigne, 4).Value = "ÉLEVÉE"
+                    .Cells(alerteLigne, 4).Interior.Color = RGB(255, 192, 0)
+                End If
+                
+                alerteLigne = alerteLigne + 1
+            End With
+        End If
+    Next cle
+    
+    ' === ANOMALIE 3 : FLAGS SUSPECTS ===
+    Application.StatusBar = "Analyse: Flags Suspects..."
+    
+    Dim dicSuspects As Object
+    Set dicSuspects = CreateObject("Scripting.Dictionary")
+    
+    For i = 2 To derniereLigne
+        flags = ws.Cells(i, 5).Value
+        
+        ' Vérifier la présence de flags suspects (F, P, U)
+        If InStr(flags, "F") > 0 Or InStr(flags, "P") > 0 Or InStr(flags, "U") > 0 Then
+            source = ws.Cells(i, 2).Value
+            If dicSuspects.Exists(source) Then
+                dicSuspects(source) = dicSuspects(source) + 1
+            Else
+                dicSuspects.Add source, 1
+            End If
+        End If
+    Next i
+    
+    ' Générer les alertes (seuil > 20)
+    For Each cle In dicSuspects.Keys
+        If dicSuspects(cle) > 20 Then
+            With wsAnomalies
+                .Cells(alerteLigne, 1).Value = "Flags Suspects"
+                .Cells(alerteLigne, 2).Value = cle
+                .Cells(alerteLigne, 3).Value = dicSuspects(cle) & " paquets FIN/PSH/URG"
+                .Cells(alerteLigne, 4).Value = "MOYENNE"
+                .Cells(alerteLigne, 4).Interior.Color = RGB(255, 255, 0)
+                
+                alerteLigne = alerteLigne + 1
+            End With
+        End If
+    Next cle
+    
+    ' === FINALISATION DE L'ONGLET ANOMALIES ===
+    With wsAnomalies
+        If alerteLigne > 2 Then
+            .Columns("A:D").AutoFit
+            .Range("A1:D" & alerteLigne - 1).Borders.LineStyle = xlContinuous
+            
+            ' Ajouter un résumé en haut
+            .Range("F2").Value = "Résumé de l'Analyse"
+            .Range("F2").Font.Bold = True
+            .Range("F2").Font.Size = 14
+            
+            .Range("F3").Value = "Paquets analysés:"
+            .Range("G3").Value = nbLignes
+            
+            .Range("F4").Value = "Anomalies détectées:"
+            .Range("G4").Value = alerteLigne - 2
+            .Range("G4").Font.Bold = True
+            .Range("G4").Font.Color = RGB(255, 0, 0)
+        Else
+            .Range("A2").Value = "Aucune anomalie détectée"
+            .Range("A2").Font.Color = RGB(0, 128, 0)
+            .Range("A2").Font.Bold = True
+        End If
+    End With
+    
+    Application.StatusBar = False
+    
+    ' Activer l'onglet Anomalies
+    wsAnomalies.Activate
+    
+End Sub
+
+
+' --- FONCTION POUR EXPORTER EN CSV ---
+Sub ExporterCSV()
+    
+    Dim cheminSortie As String
+    Dim ws As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim ligneCSV As String
+    Dim numFichier As Integer
+    
+    Set ws = ActiveSheet
+    derniereLigne = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    
+    ' Demander le chemin de sauvegarde
+    cheminSortie = Application.GetSaveAsFilename( _
+        InitialFileName:="rapport_" & Format(Now, "yyyymmdd_hhmmss") & ".csv", _
+        FileFilter:="Fichiers CSV (*.csv), *.csv", _
+        Title:="Enregistrer le rapport CSV")
+    
+    If cheminSortie = "Faux" Then Exit Sub
+    
+    ' Créer le fichier CSV
+    numFichier = FreeFile
+    Open cheminSortie For Output As #numFichier
+    
+    ' Écrire les données (séparateur point-virgule pour Excel français)
+    For i = 1 To derniereLigne
+        ligneCSV = ws.Cells(i, 1).Value & ";" & _
+                   ws.Cells(i, 2).Value & ";" & _
+                   ws.Cells(i, 3).Value & ";" & _
+                   ws.Cells(i, 4).Value & ";" & _
+                   ws.Cells(i, 5).Value
+        
+        Print #numFichier, ligneCSV
+    Next i
+    
+    Close #numFichier
+    
+    MsgBox "Fichier CSV exporté avec succès!" & vbCrLf & cheminSortie, vbInformation, "Export terminé"
+    
+End Sub

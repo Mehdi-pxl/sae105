@@ -1,149 +1,112 @@
-# Network Security Monitoring - SAE 1.05
+# SAÉ 1.05 - Network Log Analysis
 
 ## Project Context
 
-This project analyzes network logs from a France-India production site to identify security anomalies causing network saturation. The analysis focuses on detecting two main types of suspicious activities.
+Analysis of network logs from a France-India production site to identify anomalies causing network saturation.
+
+## Project Structure
+
+```
+sae105/
+├── data/                    # tcpdump log files
+│   ├── DumpFile.txt
+│   ├── DumpFile05.txt
+│   └── fichier182.txt
+├── scripts/
+│   └── analyse_reseau.py    # Main analysis script
+├── rapports/                # Generated reports (1 subfolder per file)
+│   ├── DumpFile/
+│   │   ├── rapport_*.csv
+│   │   ├── rapport_*.json
+│   │   └── rapport_*.md
+│   └── DumpFile05/
+├── web_interface/           # Symfony web dashboard
+└── README.md
+```
 
 ## Installation
 
 ### Requirements
 
-- Python 3.8 or higher
-- PHP 8.1 or higher
-- Composer
-- Symfony CLI
+- Python 3.8+
+- Pandas library
 
-### Setup
-
-1. Install Symfony dependencies:
+### Install Dependencies
 
 ```bash
-cd sae-monitoring
-composer install
+python -m pip install pandas
 ```
 
 ## Usage
 
-### Running the Analysis
-
-To analyze the default log file:
+### Analyze Default File
 
 ```bash
+cd scripts
 python analyse_reseau.py
 ```
 
-To analyze a specific file:
+### Analyze a Specific File
 
 ```bash
-python analyse_reseau.py path/to/logfile.txt
+python analyse_reseau.py -f ../data/DumpFile05.txt
 ```
 
-The script generates two files in `sae-monitoring/public/rapports/`:
-- A CSV file with detailed alert data
-- A JSON file with a summary of findings
+### Output
 
-Each analysis creates timestamped files (format: rapport_YYYYMMDD_HHMMSS) to maintain a history of all analyses.
+The script automatically creates a subfolder in `rapports/` named after the source file, containing 3 report files:
 
-### Viewing Results
-
-Start the Symfony web server:
-
-```bash
-cd sae-monitoring
-symfony serve
-```
-
-Open your browser to http://localhost:8000
-
-The web interface provides:
-- A list of all generated reports
-- Detailed views with interactive charts
-- PDF export functionality via browser print
+| Format | Description |
+|--------|-------------|
+| `.csv` | Full data export (Excel compatible, `;` separator) |
+| `.json` | JSON format for web interface |
+| `.md` | Readable report with tables and recommendations |
 
 ## Detected Anomalies
 
-### SYN Flood Attack
+| Type | Description | Threshold |
+|------|-------------|-----------|
+| **SYN Flood** | Flooding attack with SYN packets | > 100 packets |
+| **Port Scan** | Network reconnaissance | > 10 ports scanned |
+| **Suspicious Flags** | Packets with FIN/PSH/URG flags | > 20 packets |
 
-Source IP: 190-0-175-100.gba.solunet.com.ar
-Packets sent: 1969 SYN packets
-Severity: CRITICAL
-Additional info: Suspicious "XXXX" payload detected
-
-### Abnormal Connection Timing
-
-Multiple connections detected outside normal business hours (8h-18h), indicating potential unauthorized access attempts.
-
-## Project Structure
+## Example Output
 
 ```
-sae105dydou/
-├── analyse_reseau.py
-├── 2025-SAE-main/
-│   └── DumpFile.txt
-├── sae-monitoring/
-│   ├── src/Controller/
-│   │   └── RapportController.php
-│   ├── templates/rapport/
-│   │   ├── index.html.twig
-│   │   └── detail.html.twig
-│   └── public/rapports/
-└── README.md
+============================================================
+     SAÉ 1.05 - NETWORK LOG ANALYSIS (TCPDUMP)
+============================================================
+
+[INFO] Reading file: ../data/DumpFile.txt
+[INFO] 10766 valid lines parsed
+[INFO] 496874 hexadecimal lines ignored
+[INFO] Analyzing anomalies...
+[INFO] 11 anomaly(ies) detected
+
+[OK] CSV report generated
+[OK] JSON report generated
+[OK] Markdown report generated
+
+✅ 10766 packets analyzed
+⚠️  11 anomaly(ies) detected
+📁 Reports saved in: ../rapports/DumpFile/
 ```
 
-## Technical Implementation
+## Web Interface (Optional)
 
-### Python Analysis Script
+```bash
+cd web_interface
+php -S localhost:8000 -t public
+```
 
-The script uses Python's standard library to:
-- Parse tcpdump format logs with regular expressions
-- Count SYN packets per source IP
-- Detect connections outside normal hours
-- Export results in CSV and JSON formats
+Access: http://localhost:8000
 
-Detection thresholds:
-- SYN flood: more than 100 SYN packets from a single IP
-- Normal hours: 8h-18h (India timezone)
-
-### Symfony Web Interface
-
-Single controller architecture using basic PHP functions:
-- scandir() to list report files
-- fopen() and fgetcsv() to read CSV data
-- json_decode() to parse JSON summaries
-
-### Data Visualization
-
-Charts are generated using Chart.js loaded from CDN. Two chart types:
-- Pie chart showing alert distribution by severity
-- Bar chart showing attack type distribution
-
-### PDF Export
-
-The print functionality uses the browser's native print dialog with CSS media queries to hide navigation elements when printing.
-
-## Security Recommendations
-
-Based on the detected anomaly:
-
-1. Block the attacking IP address immediately
-2. Implement SYN cookies on affected servers
-3. Deploy an intrusion detection system
-4. Set up automated monitoring for similar patterns
-
-## Technical Choices
-
-### Why Chart.js via CDN
-
-Using a CDN provides a simple integration without requiring local installation or build processes. The library is lightweight and well-documented.
-
-### Why Browser Print for PDF
-
-The native browser print function works across all platforms without requiring additional PHP libraries. Users can save as PDF directly from the print dialog.
-
-### Why Timestamped Reports
-
-Each analysis creates uniquely named files, preserving a complete history of network incidents. This allows for temporal analysis and prevents data loss from overwrites.
+Features:
+- Report history listing by source file
+- Interactive charts (Protocol & Flags distribution)
+- Packet data table
+- PDF export via browser print
 
 ## Author
 
-First year BUT R&T student
+BUT R&T Student - January 2026
