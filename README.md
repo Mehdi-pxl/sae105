@@ -13,7 +13,8 @@ sae105/
 │   ├── DumpFile05.txt
 │   └── fichier182.txt
 ├── scripts/
-│   └── analyse_reseau.py    # Main analysis script
+│   ├── analyse_reseau.py    # Main Python analysis script
+│   └── vba.txt              # VBA macro for Excel
 ├── rapports/                # Generated reports (1 subfolder per file)
 │   ├── DumpFile/
 │   │   ├── rapport_*.csv
@@ -67,8 +68,7 @@ The script automatically creates a subfolder in `rapports/` named after the sour
 | Type | Description | Threshold |
 |------|-------------|-----------|
 | **SYN Flood** | Flooding attack with SYN packets | > 100 packets |
-| **Port Scan** | Network reconnaissance | > 10 ports scanned |
-| **Suspicious Flags** | Packets with FIN/PSH/URG flags | > 20 packets |
+| **Port Scan** | Network reconnaissance (DNS queries) | > 10 ports scanned |
 
 ## Example Output
 
@@ -78,17 +78,16 @@ The script automatically creates a subfolder in `rapports/` named after the sour
 ============================================================
 
 [INFO] Reading file: ../data/DumpFile.txt
-[INFO] 10766 valid lines parsed
-[INFO] 496874 hexadecimal lines ignored
+[INFO] 10931 valid lines parsed
 [INFO] Analyzing anomalies...
-[INFO] 11 anomaly(ies) detected
+[INFO] 2 anomaly(ies) detected
 
 [OK] CSV report generated
 [OK] JSON report generated
 [OK] Markdown report generated
 
-✅ 10766 packets analyzed
-⚠️  11 anomaly(ies) detected
+✅ 10931 packets analyzed
+⚠️  2 anomaly(ies) detected
 📁 Reports saved in: ../rapports/DumpFile/
 ```
 
@@ -103,8 +102,8 @@ Access: http://localhost:8000
 
 Features:
 - Report history listing by source file
-- Interactive charts (Protocol & Flags distribution)
-- Packet data table
+- Interactive charts (Attack Types & Traffic Timeline)
+- Packet data table with flags highlighting
 - PDF export via browser print
 
 ## Author
